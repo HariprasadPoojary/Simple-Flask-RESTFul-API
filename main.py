@@ -1,5 +1,5 @@
 from flask import Flask
-from flask_restful import Api, Resource, reqparse
+from flask_restful import Api, Resource, reqparse, abort
 
 app = Flask(__name__)
 api = Api(app)
@@ -36,9 +36,20 @@ class Base(Resource):
 
 class Video(Resource):
     def get(self, video_id):
-        return videos[video_id]
+        video = videos.get(video_id)
+        if not video:
+            abort(404, ErrorMessage="Video ID is not valid!")
+
+        return video, 200
 
     def put(self, video_id):
+        # get video id
+        video = videos.get(video_id)
+        # send error message if video exists
+        if video:
+            abort(409, ErrorMessage="Video already exists!")
+
+        # validate and add video info
         args = video_out_args.parse_args()
         videos[video_id] = args
         return {video_id: args}, 201
