@@ -1,8 +1,26 @@
+from os import name
 from flask import Flask
-from flask_restful import Api, Resource, reqparse, abort
+from flask_restful import Api, Resource, reqparse, abort, fields, marshal_with
+from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 api = Api(app)
+db = SQLAlchemy(app)
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///database.db"
+
+# * Models
+class VideoModel(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(500), nullable=False)
+    views = db.Column(db.Integer, nullable=False)
+    likes = db.Column(db.Integer, nullable=False)
+
+    def __repr__(self) -> str:
+        return f"Video: {self.name}"
+
+
+#! Only Run below code the first you create your Models, this creates database tables
+# db.create_all()
 
 video_out_args = reqparse.RequestParser()
 video_out_args.add_argument(
@@ -24,27 +42,15 @@ video_out_args.add_argument(
     help="Required: Views of the video",
 )
 
-videos = {}
+# * serializer result object
+resource_fields = {
+    "id": fields.Integer,
+    "name": fields.String,
+    "views": fields.Integer,
+    "likes": fields.Integer,
+}
 
-
-def abort_video_exists(video_id):
-    # get video id
-    video = videos.get(video_id)
-    # send error message if video exists
-    if video:
-        abort(409, ErrorMessage="Video already exists!")
-
-
-def abort_video_doesnt_exists(video_id):
-    # get video id
-    video = videos.get(video_id)
-    # send error message if video doesn't exists
-    if not video:
-        abort(404, ErrorMessage="Video ID is not valid!")
-
-    return video
-
-
+# * Views
 class Base(Resource):
     def get(self):
         return {
@@ -53,31 +59,53 @@ class Base(Resource):
 
 
 class Video(Resource):
+    @marshal_with(resource_fields)
     def get(self, video_id):
-        # validate video id
-        video = abort_video_doesnt_exists(video_id)
+        # get video id or abort with 404
+        video = VideoModel.query.filter_by(id=video_id).first_or_404(
+            description="Video ID does not exists!"
+        )
 
         return video, 200
 
+    @marshal_with(resource_fields)
     def put(self, video_id):
-        # validate video id
-        abort_video_exists(video_id)
-
-        # validate and add video info
+        # validate and get argumets received
         args = video_out_args.parse_args()
-        videos[video_id] = args
+        # check if video exists
+        db_video = VideoModel.query.filter_by(id=video_id).first()
 
-        return {video_id: args}, 201
+        if not db_video:
+            # create new Model instance
+            video = VideoModel(
+                id=video_id,
+                name=args["name"],
+                views=args["views"],
+                likes=args["likes"],
+            )
+            # add this instance to database
+            db.session.add(video)
+            # commit to database
+            db.session.commit()
+            # this return object will be serialized by marshal_with decorator
+            return video, 201
+
+        abort(406, ErrorMessage="VideoID already exists!")
 
     def delete(self, video_id):
         # validate video id
-        video = abort_video_doesnt_exists(video_id)
-
-        if video:
-            del videos[video_id]
+        video = VideoModel.query.filter_by(id=video_id).first_or_404(
+            description="Video ID does not exists!"
+        )
+        # delete the video
+        db.session.delete(video)
+        # commit
+        db.session.commit()
 
         return 200
 
+
+# * Routing
 api.add_resource(Base, "/")
 api.add_resource(Video, "/video/<int:video_id>")
 
