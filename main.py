@@ -2,6 +2,7 @@ from os import name
 from flask import Flask
 from flask_restful import Api, Resource, reqparse, abort, fields, marshal_with
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.orm import session
 
 app = Flask(__name__)
 api = Api(app)
@@ -90,7 +91,26 @@ class Video(Resource):
             # this return object will be serialized by marshal_with decorator
             return video, 201
 
-        abort(406, ErrorMessage="VideoID already exists!")
+        abort(409, ErrorMessage="VideoID already exists!")
+
+    @marshal_with(resource_fields)
+    def patch(self, video_id):
+        # check if video exists
+        db_video = VideoModel.query.filter_by(id=video_id).first()
+        if not db_video:
+            abort(406, ErrorMessage="VideoID already exists!")
+
+        # validate and get argumets received
+        args = video_out_args.parse_args()
+
+        # update model parameters
+        db_video.name = args["name"]
+        db_video.views = args["views"]
+        db_video.likes = args["likes"]
+        # commit
+        db.session.commit()
+
+        return db_video, 202
 
     def delete(self, video_id):
         # validate video id
