@@ -1,8 +1,6 @@
-from os import name
 from flask import Flask
 from flask_restful import Api, Resource, reqparse, abort, fields, marshal_with
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.orm import session
 
 app = Flask(__name__)
 api = Api(app)
@@ -23,24 +21,38 @@ class VideoModel(db.Model):
 #! Only Run below code the first you create your Models, this creates database tables
 # db.create_all()
 
-video_out_args = reqparse.RequestParser()
-video_out_args.add_argument(
+video_put_args = reqparse.RequestParser()
+video_put_args.add_argument(
     "name",
     type=str,
     required=True,
     help="Required: Name of the video",
 )
-video_out_args.add_argument(
+video_put_args.add_argument(
     "likes",
     type=int,
     required=True,
     help="Required: Likes on the video",
 )
-video_out_args.add_argument(
+video_put_args.add_argument(
     "views",
     type=int,
     required=True,
     help="Required: Views of the video",
+)
+
+video_patch_args = reqparse.RequestParser()
+video_patch_args.add_argument(
+    "name",
+    type=str,
+)
+video_patch_args.add_argument(
+    "likes",
+    type=int,
+)
+video_patch_args.add_argument(
+    "views",
+    type=int,
 )
 
 # * serializer result object
@@ -72,7 +84,7 @@ class Video(Resource):
     @marshal_with(resource_fields)
     def put(self, video_id):
         # validate and get argumets received
-        args = video_out_args.parse_args()
+        args = video_put_args.parse_args()
         # check if video exists
         db_video = VideoModel.query.filter_by(id=video_id).first()
 
@@ -101,12 +113,15 @@ class Video(Resource):
             abort(406, ErrorMessage="VideoID already exists!")
 
         # validate and get argumets received
-        args = video_out_args.parse_args()
+        args = video_patch_args.parse_args()
 
-        # update model parameters
-        db_video.name = args["name"]
-        db_video.views = args["views"]
-        db_video.likes = args["likes"]
+        # update model parameters based on individual parameters
+        if args["name"]:
+            db_video.name = args["name"]
+        if args["views"]:
+            db_video.views = args["views"]
+        if args["likes"]:
+            db_video.likes = args["likes"]
         # commit
         db.session.commit()
 
